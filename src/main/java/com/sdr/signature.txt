@@ -1,0 +1,186 @@
+package com.sdr.server.impl;
+
+import java.security.*;
+import java.security.spec.*;
+import java.util.*;
+
+/**
+ * Signature Channel Implementation
+ * Generates and verifies digital signatures
+ * Based on IRSS::IandA::SignatureChannel
+ */
+public class SignatureChannelImpl {
+    
+    private final long channelId;
+    private final String algorithm;
+    private final PrivateKey privateKey;
+    private final PublicKey publicKey;
+    private Signature signature;
+    private List<byte[]> dataBuffer;
+    
+    // For signature generation
+    public SignatureChannelImpl(long channelId, String algorithm, 
+                               KeyPair keyPair) throws Exception {
+        this.channelId = channelId;
+        this.algorithm = algorithm;
+        this.privateKey = keyPair.getPrivate();
+        this.publicKey = keyPair.getPublic();
+        this.dataBuffer = new ArrayList<>();
+        
+        initializeSignature();
+        System.out.println("[SIGNATURE] Channel " + channelId + 
+                         " initialized with " + algorithm);
+    }
+    
+    /**
+     * Initialize signature based on algorithm
+     */
+    private void initializeSignature() throws Exception {
+        String sigAlgorithm;
+        
+        switch (algorithm.toUpperCase()) {
+            case "RSA":
+            case "RSA-SHA256":
+                sigAlgorithm = "SHA256withRSA";
+                break;
+            
+            case "RSA-SHA512":
+                sigAlgorithm = "SHA512withRSA";
+                break;
+            
+            case "DSA":
+            case "DSA-SHA256":
+                sigAlgorithm = "SHA256withDSA";
+                break;
+            
+            case "ECDSA":
+            case "ECDSA-SHA256":
+                sigAlgorithm = "SHA256withECDSA";
+                break;
+            
+            default:
+                sigAlgorithm = "SHA256withRSA"; // Default
+        }
+        
+        signature = Signature.getInstance(sigAlgorithm);
+    }
+    
+    /**
+     * Push data to be signed
+     * Based on IRSS::IandA::Channel::pushData
+     */
+    public void pushData(byte[] data) throws Exception {
+        if (data != null && data.length > 0) {
+            dataBuffer.add(data.clone());
+        }
+    }
+    
+    /**
+     * Generate digital signature
+     * Based on IRSS::IandA::SignatureChannel::getSignature
+     */
+    public byte[] getSignature() throws Exception {
+        signature.initSign(privateKey);
+        
+        // Update signature with all buffered data
+        for (byte[] data : dataBuffer) {
+            signature.update(data);
+        }
+        
+        byte[] signatureBytes = signature.sign();
+        
+        System.out.println("[SIGNATURE] Generated signature");
+        System.out.println("       Algorithm: " + algorithm);
+        System.out.println("       Data size: " + getTotalDataSize() + " bytes");
+        System.out.println("       Signature size: " + signatureBytes.length + " bytes");
+        
+        return signatureBytes;
+    }
+    
+    /**
+     * Verify a signature
+     * Based on IRSS::IandA::SignatureVerificationChannel::isSignatureValid
+     */
+    public boolean verifySignature(byte[] signatureToVerify) throws Exception {
+        signature.initVerify(publicKey);
+        
+        // Update signature with all buffered data
+        for (byte[] data : dataBuffer) {
+            signature.update(data);
+        }
+        
+        boolean isValid = signature.verify(signatureToVerify);
+        
+        System.out.println("[SIGNATURE] Verification result: " + 
+                         (isValid ? "VALID" : "INVALID"));
+        
+        return isValid;
+    }
+    
+    /**
+     * Reset channel state
+     * Based on IRSS::IandA::Channel::reset
+     */
+    public void reset() {
+        dataBuffer.clear();
+        System.out.println("[SIGNATURE] Channel " + channelId + " reset");
+    }
+    
+    /**
+     * Get maximum data size
+     */
+    public int getMaxDataSize() {
+        return Integer.MAX_VALUE; // Practically unlimited
+    }
+    
+    /**
+     * Get public key for external use
+     */
+    public PublicKey getPublicKey() {
+        return publicKey;
+    }
+    
+    /**
+     * Get total size of buffered data
+     */
+    private int getTotalDataSize() {
+        return dataBuffer.stream()
+            .mapToInt(arr -> arr.length)
+            .sum();
+    }
+    
+    /**
+     * Generate RSA key pair (utility method)
+     */
+    public static KeyPair generateRSAKeyPair(int keySize) throws Exception {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(keySize);
+        return keyGen.generateKeyPair();
+    }
+    
+    /**
+     * Generate DSA key pair (utility method)
+     */
+    public static KeyPair generateDSAKeyPair() throws Exception {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("DSA");
+        keyGen.initialize(1024);
+        return keyGen.generateKeyPair();
+    }
+    
+    /**
+     * Get channel info
+     */
+    public String getInfo() {
+        return String.format("SignatureChannel[id=%d, algorithm=%s, buffered=%d bytes]",
+            channelId, algorithm, getTotalDataSize());
+    }
+}
+
+
+
+
+
+
+
+
+
